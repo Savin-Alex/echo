@@ -1,0 +1,52 @@
+{
+  "name": "echo",
+  "version": "1.0.0",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "test": "echo \"No test specified\" && exit 1",
+    "build": "electron-builder",
+    "dist": "electron-builder --publish=never"
+  },
+  "keywords": ["ai", "copilot", "interview", "meeting", "assistant"],
+  "author": "CriticalSuccess",
+  "license": "ISC",
+  "description": "Echo - AI Interview, Meeting & Workplace Copilot",
+  "dependencies": {
+    "electron": "^29.0.0",
+    "node-fetch": "^3.3.1",
+    "better-sqlite3": "^9.2.2",
+    "crypto-js": "^4.2.0",
+    "axios": "^1.6.7",
+    "electron-store": "^8.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "@babel/core": "^7.24.0",
+    "electron-builder": "^24.9.1",
+    "@types/node": "^20.11.16",
+    "@types/crypto-js": "^4.2.2"
+  },
+  "build": {
+    "appId": "com.criticalsuccess.echo",
+    "productName": "Echo",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "node_modules/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

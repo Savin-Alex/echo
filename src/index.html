@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Echo Overlay</title>
+    <style>
+      :root {
+        --bg-color: rgba(0, 0, 0, 0.85);
+        --text-color: #f0f0f0;
+        --accent-color: #6ab7ff;
+        --success-color: #4ade80;
+        --warning-color: #fbbf24;
+        --error-color: #f87171;
+        --border-color: rgba(255, 255, 255, 0.1);
+        --hover-color: rgba(255, 255, 255, 0.05);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html, body {
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background-color: transparent;
+        color: var(--text-color);
+        -webkit-user-select: none;
+        overflow: hidden;
+      }
+
+      .overlay {
+        width: 100%;
+        height: 100vh;
+        backdrop-filter: blur(15px);
+        background: linear-gradient(135deg, var(--bg-color) 0%, rgba(0, 0, 0, 0.7) 100%);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 12px 12px 0 0;
+      }
+
+      .title {
+        font-weight: 600;
+        font-size: 1.1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .title::before {
+        content: "🎯";
+        font-size: 1.2rem;
+      }
+
+      .status-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--success-color);
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+
+      .controls {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+      }
+
+      button {
+        background: var(--accent-color);
+        color: #000;
+        border: none;
+        padding: 0.5rem;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 32px;
+        height: 32px;
+      }
+
+      button:hover {
+        background: #5aa3e8;
+        transform: translateY(-1px);
+      }
+
+      button:active {
+        transform: translateY(0);
+      }
+
+      .btn-close {
+        background: rgba(255, 255, 255, 0.1);
+        color: var(--text-color);
+        font-size: 1.2rem;
+      }
+
+      .btn-close:hover {
+        background: var(--error-color);
+      }
+
+      .content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .question-section {
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+        background: rgba(0, 0, 0, 0.1);
+      }
+
+      .question-title {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--accent-color);
+        margin-bottom: 0.5rem;
+      }
+
+      .question-text {
+        font-size: 0.85rem;
+        line-height: 1.4;
+        opacity: 0.9;
+      }
+
+      .suggestions {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      .suggestion {
+        padding: 0.75rem;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .suggestion::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+        transition: left 0.5s ease;
+      }
+
+      .suggestion:hover {
+        background: var(--hover-color);
+        border-color: var(--accent-color);
+        transform: translateY(-1px);
+      }
+
+      .suggestion:hover::before {
+        left: 100%;
+      }
+
+      .suggestion-text {
+        font-size: 0.85rem;
+        line-height: 1.4;
+        margin-bottom: 0.5rem;
+      }
+
+      .suggestion-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.75rem;
+        opacity: 0.7;
+      }
+
+      .suggestion-confidence {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+      }
+
+      .confidence-bar {
+        width: 40px;
+        height: 2px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 1px;
+        overflow: hidden;
+      }
+
+      .confidence-fill {
+        height: 100%;
+        background: var(--success-color);
+        transition: width 0.3s ease;
+      }
+
+      .coaching-section {
+        padding: 1rem;
+        border-top: 1px solid var(--border-color);
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 0 0 12px 12px;
+      }
+
+      .coaching-title {
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: var(--warning-color);
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .coaching-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.8rem;
+        margin-bottom: 0.25rem;
+        opacity: 0.9;
+      }
+
+      .coaching-icon {
+        font-size: 1rem;
+      }
+
+      .loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        color: var(--accent-color);
+      }
+
+      .loading-spinner {
+        width: 20px;
+        height: 20px;
+        border: 2px solid rgba(106, 183, 255, 0.3);
+        border-top: 2px solid var(--accent-color);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-right: 0.5rem;
+      }
+
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        text-align: center;
+        opacity: 0.6;
+      }
+
+      .empty-icon {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+        opacity: 0.5;
+      }
+
+      .hotkeys {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        background: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 0.75rem;
+        margin-top: 0.5rem;
+        font-size: 0.75rem;
+        opacity: 0;
+        transform: translateY(-10px);
+        transition: all 0.2s ease;
+        pointer-events: none;
+        z-index: 1000;
+      }
+
+      .hotkeys.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .hotkey-item {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 0.25rem;
+      }
+
+      .hotkey-item:last-child {
+        margin-bottom: 0;
+      }
+
+      .hotkey-combo {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 0.125rem 0.375rem;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 0.7rem;
+      }
+
+      /* Stealth mode styles */
+      .stealth-mode {
+        opacity: 0.3;
+        transform: scale(0.95);
+        transition: all 0.3s ease;
+      }
+
+      .stealth-mode:hover {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      /* Responsive adjustments */
+      @media (max-width: 400px) {
+        .overlay {
+          border-radius: 8px;
+        }
+        
+        .header {
+          padding: 0.75rem;
+        }
+        
+        .suggestions {
+          padding: 0.75rem;
+        }
+      }
+
+      /* Scrollbar styling */
+      .suggestions::-webkit-scrollbar {
+        width: 4px;
+      }
+
+      .suggestions::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 2px;
+      }
+
+      .suggestions::-webkit-scrollbar-thumb {
+        background: var(--accent-color);
+        border-radius: 2px;
+      }
+
+      .suggestions::-webkit-scrollbar-thumb:hover {
+        background: #5aa3e8;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="overlay" id="overlay">
+      <div class="header">
+        <div class="title">
+          <span>Echo Copilot</span>
+          <div class="status-indicator" id="status-indicator"></div>
+        </div>
+        <div class="controls">
+          <button id="btn-stealth" title="Toggle stealth mode">👁️</button>
+          <button id="btn-settings" title="Settings">⚙️</button>
+          <button id="btn-close" title="Close">×</button>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="question-section" id="question-section" style="display: none;">
+          <div class="question-title">Current Question</div>
+          <div class="question-text" id="question-text"></div>
+        </div>
+
+        <div class="suggestions" id="suggestions">
+          <div class="empty-state">
+            <div class="empty-icon">💭</div>
+            <div>Waiting for suggestions...</div>
+            <div style="font-size: 0.7rem; margin-top: 0.5rem; opacity: 0.6;">
+              Press Alt+Shift+S for suggestions
+            </div>
+          </div>
+        </div>
+
+        <div class="coaching-section" id="coaching-section" style="display: none;">
+          <div class="coaching-title">
+            <span>🎯</span>
+            Live Coaching
+          </div>
+          <div class="coaching-content" id="coaching-content"></div>
+        </div>
+      </div>
+
+      <div class="hotkeys" id="hotkeys">
+        <div class="hotkey-item">
+          <span>Toggle Overlay</span>
+          <span class="hotkey-combo">⌥⌘E</span>
+        </div>
+        <div class="hotkey-item">
+          <span>Get Suggestions</span>
+          <span class="hotkey-combo">⌥⌘S</span>
+        </div>
+        <div class="hotkey-item">
+          <span>Web Lookup</span>
+          <span class="hotkey-combo">⌥⌘W</span>
+        </div>
+        <div class="hotkey-item">
+          <span>Show Hotkeys</span>
+          <span class="hotkey-combo">⌥⌘?</span>
+        </div>
+      </div>
+    </div>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>
