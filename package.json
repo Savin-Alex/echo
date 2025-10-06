@@ -5,28 +5,43 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "test": "echo \"No test specified\" && exit 1",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:unit": "jest --testPathPattern=tests/services",
+    "test:integration": "jest --testPathPattern=tests/integration",
+    "test:ci": "jest --ci --coverage --watchAll=false",
     "build": "electron-builder",
     "dist": "electron-builder --publish=never"
   },
-  "keywords": ["ai", "copilot", "interview", "meeting", "assistant"],
+  "keywords": [
+    "ai",
+    "copilot",
+    "interview",
+    "meeting",
+    "assistant"
+  ],
   "author": "CriticalSuccess",
   "license": "ISC",
   "description": "Echo - AI Interview, Meeting & Workplace Copilot",
   "dependencies": {
-    "electron": "^29.0.0",
-    "node-fetch": "^3.3.1",
+    "axios": "^1.6.7",
     "better-sqlite3": "^9.2.2",
     "crypto-js": "^4.2.0",
-    "axios": "^1.6.7",
-    "electron-store": "^8.1.0"
+    "electron": "^29.0.0",
+    "electron-store": "^8.1.0",
+    "node-fetch": "^3.3.1"
   },
   "devDependencies": {
-    "typescript": "^5.8.0",
     "@babel/core": "^7.24.0",
-    "electron-builder": "^24.9.1",
+    "@types/crypto-js": "^4.2.2",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.11.16",
-    "@types/crypto-js": "^4.2.2"
+    "@types/supertest": "^6.0.3",
+    "electron-builder": "^24.9.1",
+    "jest": "^30.2.0",
+    "supertest": "^7.1.4",
+    "typescript": "^5.8.0"
   },
   "build": {
     "appId": "com.criticalsuccess.echo",
