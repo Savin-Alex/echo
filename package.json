@@ -12,7 +12,22 @@
     "test:integration": "jest --testPathPattern=tests/integration",
     "test:ci": "jest --ci --coverage --watchAll=false",
     "build": "electron-builder",
-    "dist": "electron-builder --publish=never"
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux",
+    "build:all": "electron-builder --mac --win --linux",
+    "dist": "electron-builder --publish=never",
+    "dist:mac": "electron-builder --mac --publish=never",
+    "dist:win": "electron-builder --win --publish=never",
+    "dist:linux": "electron-builder --linux --publish=never",
+    "dist:all": "electron-builder --mac --win --linux --publish=never",
+    "pack": "electron-builder --dir",
+    "pack:mac": "electron-builder --mac --dir",
+    "pack:win": "electron-builder --win --dir",
+    "pack:linux": "electron-builder --linux --dir",
+    "clean": "rm -rf dist",
+    "rebuild": "npm run clean && npm run build",
+    "postinstall": "electron-builder install-app-deps"
   },
   "keywords": [
     "ai",
@@ -28,7 +43,6 @@
     "axios": "^1.6.7",
     "better-sqlite3": "^9.2.2",
     "crypto-js": "^4.2.0",
-    "electron": "^29.0.0",
     "electron-store": "^8.1.0",
     "node-fetch": "^3.3.1"
   },
@@ -38,6 +52,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^20.11.16",
     "@types/supertest": "^6.0.3",
+    "electron": "^29.0.0",
     "electron-builder": "^24.9.1",
     "jest": "^30.2.0",
     "supertest": "^7.1.4",
@@ -46,22 +61,116 @@
   "build": {
     "appId": "com.criticalsuccess.echo",
     "productName": "Echo",
+    "copyright": "Copyright © 2024 CriticalSuccess",
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "build"
     },
     "files": [
       "src/**/*",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "!node_modules/**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
+      "!**/{appveyor.yml,.travis.yml,circle.yml}",
+      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
+    ],
+    "extraResources": [
+      {
+        "from": "assets/",
+        "to": "assets/",
+        "filter": ["**/*"]
+      }
     ],
     "mac": {
       "category": "public.app-category.productivity",
-      "target": "dmg"
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "icon": "build/icon.icns",
+      "darkModeSupport": true,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": null
     },
     "win": {
-      "target": "nsis"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64", "ia32"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
     },
     "linux": {
-      "target": "AppImage"
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "deb",
+          "arch": ["x64"]
+        },
+        {
+          "target": "rpm",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "Office"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Echo"
+    },
+    "dmg": {
+      "title": "Echo Installer",
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 140,
+          "y": 200,
+          "type": "file"
+        },
+        {
+          "x": 400,
+          "y": 200,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "appImage": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "deb": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "depends": ["libasound2", "libnotify4", "libnss3", "libxtst6", "libxss1", "libgconf-2-4"]
+    },
+    "rpm": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "depends": ["alsa-lib", "libnotify", "nss", "libXtst", "libXScrnSaver", "GConf2"]
     }
   }
 }
