@@ -33,7 +33,7 @@ const translations: { [lang: string]: Translations } = {
     title: 'Echo Помощник',
     start: 'Начать',
     stop: 'Остановить',
-    summarize: 'Резюме',
+    summarize: 'Резюмировать',
     reply: 'Ответить',
     generate: 'Генерировать',
     loading: 'Загрузка...',
