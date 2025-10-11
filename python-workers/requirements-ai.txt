@@ -1,0 +1,51 @@
+# Optional AI Dependencies for Echo Copilot
+# Install these AFTER core requirements are working
+# These require system dependencies and take longer to install
+
+# ASR (Automatic Speech Recognition)
+# Requires: ffmpeg, pkg-config (install with: brew install ffmpeg pkg-config)
+faster-whisper>=1.0.0
+
+# Embeddings & Vector Store
+# Auto-downloads models on first use (~100MB)
+sentence-transformers>=2.3.0
+chromadb>=0.4.22
+
+# OCR (Optical Character Recognition)
+# Requires: tesseract (install with: brew install tesseract)
+pytesseract>=0.3.10
+pdf2image>=1.17.0
+
+# OCR Alternative (no system dependencies, but slower and larger)
+# easyocr>=1.7.1
+
+# Voice Processing
+# Requires: libsndfile, ffmpeg
+librosa>=0.10.0
+soundfile>=0.12.0
+
+# Document Processing
+python-docx>=1.1.0
+
+# ============================================================================
+# Installation Instructions
+# ============================================================================
+#
+# macOS (with Homebrew):
+#   brew install ffmpeg pkg-config tesseract
+#   source .venv/bin/activate
+#   pip install -r requirements-ai.txt
+#
+# Ubuntu/Debian:
+#   sudo apt-get install ffmpeg pkg-config tesseract-ocr libsndfile1
+#   source .venv/bin/activate
+#   pip install -r requirements-ai.txt
+#
+# Windows:
+#   Install ffmpeg from https://ffmpeg.org/download.html
+#   Install tesseract from https://github.com/UB-Mannheim/tesseract/wiki
+#   .venv\Scripts\Activate.ps1
+#   pip install -r requirements-ai.txt
+#
+# ============================================================================
+
