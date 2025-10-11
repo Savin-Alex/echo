@@ -1,0 +1,61 @@
+{
+  "name": "echo-copilot-electron",
+  "version": "1.0.0",
+  "description": "Echo Copilot Electron App with React",
+  "main": "dist/main/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "concurrently -n MAIN,VITE \"npm run dev:main\" \"npm run dev:vite\"",
+    "dev:main": "tsc -p tsconfig.main.json && electron dist/main/index.js --dev",
+    "dev:vite": "vite",
+    "build": "npm run build:main && npm run build:renderer",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:renderer": "vite build",
+    "dist": "npm run build && electron-builder",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "dependencies": {
+    "electron": "^31.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "@types/react": "^18.2.48",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^9.0.0",
+    "electron-builder": "^24.13.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.11"
+  },
+  "build": {
+    "appId": "com.criticalsuccess.echo",
+    "productName": "Echo",
+    "directories": {
+      "output": "../dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "renderer/dist/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": ["dmg", "zip"],
+      "icon": "build/icon.icns"
+    },
+    "win": {
+      "target": ["nsis", "portable"],
+      "icon": "build/icon.ico"
+    },
+    "linux": {
+      "target": ["AppImage", "deb", "rpm"],
+      "icon": "build/icon.png",
+      "category": "Office"
+    }
+  }
+}
+
+
+

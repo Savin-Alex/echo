@@ -1,324 +1,358 @@
-# Echo - AI Interview, Meeting & Workplace Copilot
+# Echo - AI Copilot with Whisper & Ollama
 
-Echo is a privacy-first desktop application that provides real-time AI assistance during interviews, meetings, and workplace conversations. Built with Electron, it features local speech recognition, multiple LLM providers, and a stealth overlay interface.
+Echo is a privacy-first AI copilot desktop application built with Electron, React, and FastAPI. It provides real-time transcription, AI-powered summarization, and intelligent assistance using local models.
 
-## Features
+## 🌟 Features
 
-### 🎯 Real-Time AI Assistance
-- **Live Transcription**: Local Whisper ASR with streaming partials
-- **Context-Aware Suggestions**: AI-powered responses based on conversation context
-- **Multiple LLM Providers**: Support for OpenAI GPT, Anthropic Claude, and Google Gemini
-- **Stealth Overlay**: Transparent window that stays on top without appearing in screen shares
+### Core Capabilities
+- **Real-time Speech Recognition**: Local Whisper ASR with multiple model sizes
+- **Local LLM Integration**: Ollama support for privacy-first text generation
+- **Context Management**: Vector store with semantic search using ChromaDB
+- **OCR Support**: Extract text from images with Tesseract/EasyOCR
+- **Voice Analysis**: Audio quality metrics and speech characteristics
+- **Privacy-First**: PII redaction, local processing, encrypted storage
 
-### 🎤 Audio & Speech Processing
-- **System Audio Capture**: Records audio from video calls (Zoom, Teams, Meet, etc.)
-- **Microphone Support**: Direct microphone input for better audio quality
-- **Real-Time Coaching**: Live feedback on speaking pace, clarity, and confidence
-- **Privacy-First**: All transcription happens locally by default
+### Services
+- **ASR**: `/asr/transcribe`, `/asr/transcribe-file`, `/asr/models`, `/asr/status`
+- **LLM**: `/llm/summarize`, `/llm/reply`, `/llm/generate`, `/llm/coaching`, `/llm/meeting-notes`
+- **Context**: `/context/load`, `/context/search`, `/context/clear`, `/context/load-file`
+- **OCR**: `/ocr/extract`, `/ocr/extract-file`
+- **Voice**: `/voice/analyze`, `/voice/change`, `/voice/clone`
 
-### 💼 Workplace Integration
-- **Jira Integration**: Improve issue descriptions and acceptance criteria
-- **Confluence Support**: Generate summaries and structure documentation
-- **Messenger Integration**: Inline suggestions for Telegram, WhatsApp, Slack
-- **Post-Session Analytics**: Detailed performance metrics and summaries
+## 📋 Prerequisites
 
-### 🔒 Privacy & Security
-- **Local-First Architecture**: Data stays on your device
-- **Encrypted Storage**: AES-256 encryption for all sensitive data
-- **PII Redaction**: Automatic removal of personal information before LLM calls
-- **Configurable Retention**: Control how long data is stored
+### Required
+- **Node.js**: 18+ (for Electron and React)
+- **Python**: 3.10+ (for FastAPI backend)
+- **Ollama**: Local LLM runtime ([Install from ollama.com](https://ollama.com))
 
-## Installation
+### Optional
+- **Tesseract OCR**: For OCR functionality
+- **CUDA/ROCm**: For GPU-accelerated inference (faster-whisper)
 
-### Prerequisites
-- Node.js 18+ 
-- macOS 12+ or Windows 10/11
-- Microphone and screen recording permissions
+## 🚀 Quick Start
 
-### Setup
+### 1. Install Ollama and Pull a Model
+
 ```bash
-# Clone the repository
-git clone https://github.com/criticalsuccess/echo.git
-cd echo
+# macOS/Linux
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Windows
+# Download from https://ollama.com/download
+
+# Pull a model (llama3 recommended)
+ollama pull llama3
+```
+
+### 2. Setup Python Backend
+
+```bash
+cd python-workers
+
+# Create virtual environment
+python -m venv .venv
+
+# Activate virtual environment
+# macOS/Linux:
+source .venv/bin/activate
+# Windows:
+.venv\Scripts\activate
 
 # Install dependencies
-npm install
-
-# Start the application
-npm start
+pip install -r requirements.txt
 ```
 
-### First-Time Setup
-1. **Grant Permissions**: Allow microphone and screen recording access when prompted
-2. **Configure LLM**: Set up API keys for your preferred LLM provider
-3. **Upload Resume**: Add your resume and job description for better context
-4. **Test Audio**: Verify audio capture is working properly
+### 3. Setup Electron App
 
-## Usage
-
-### Global Shortcuts
-- `Alt+Shift+E`: Toggle overlay visibility
-- `Alt+Shift+S`: Request AI suggestions
-- `Alt+Shift+W`: Perform web lookup
-- `Alt+Shift+R`: Start new session
-- `Alt+Shift+T`: Stop current session
-- `Alt+Shift+M`: Toggle stealth mode
-- `Alt+Shift+?`: Show all shortcuts
-
-### Basic Workflow
-1. **Start Session**: Press `Alt+Shift+R` or use the menu to begin
-2. **Join Your Call**: Start your interview, meeting, or conversation
-3. **Get Suggestions**: Press `Alt+Shift+S` when you need help
-4. **View Coaching**: Real-time feedback appears automatically
-5. **End Session**: Press `Alt+Shift+T` to stop and generate summary
-
-### Stealth Mode
-Enable stealth mode to make the overlay nearly invisible:
-- Reduces opacity to 30%
-- Scales down the interface
-- Hover to temporarily restore full visibility
-- Perfect for screen sharing scenarios
-
-## Configuration
-
-### LLM Provider Setup
-
-#### OpenAI (GPT-4)
-```javascript
-// In settings or environment variables
-{
-  "openai": {
-    "apiKey": "your-openai-api-key",
-    "model": "gpt-4"
-  }
-}
-```
-
-#### Anthropic (Claude)
-```javascript
-{
-  "anthropic": {
-    "apiKey": "your-anthropic-api-key",
-    "model": "claude-3-sonnet-20240229"
-  }
-}
-```
-
-#### Google (Gemini)
-```javascript
-{
-  "google": {
-    "apiKey": "your-google-api-key",
-    "model": "gemini-pro"
-  }
-}
-```
-
-### Model Selection
-Choose from different Whisper models based on your needs:
-- **tiny**: Fastest, lowest accuracy (39 MB)
-- **base**: Good balance (74 MB)
-- **small**: Better accuracy (244 MB)
-- **medium**: High accuracy (769 MB)
-- **large**: Best accuracy (1550 MB)
-
-### Privacy Settings
-```javascript
-{
-  "privacy": {
-    "redactPII": true,
-    "localOnly": true,
-    "dataRetention": "7d", // 1d, 7d, 30d, manual
-    "encryption": true
-  }
-}
-```
-
-## Architecture
-
-### Core Components
-- **Main Process**: Electron main process managing application lifecycle
-- **ASR Service**: Local Whisper integration for speech recognition
-- **LLM Service**: Multi-provider LLM integration with prompt pipelines
-- **Database Service**: Encrypted SQLite for session and user data
-- **Overlay Renderer**: Transparent UI for real-time assistance
-
-### Data Flow
-1. **Audio Capture**: System audio + microphone → ASR Service
-2. **Transcription**: Whisper processes audio → Database storage
-3. **Context Enrichment**: Transcript + profile + session data
-4. **LLM Processing**: Context → AI suggestions → Overlay display
-5. **Analytics**: Session metrics → Performance insights
-
-### Security Model
-- **Local Processing**: Whisper runs entirely on device
-- **Encrypted Storage**: All data encrypted with AES-256
-- **Secure Keychain**: API keys stored in OS keychain
-- **PII Redaction**: Automatic removal of sensitive information
-- **No Telemetry**: Zero data sent to external servers
-
-## Development
-
-### Project Structure
-```
-src/
-├── main.js              # Electron main process
-├── preload.js           # Secure IPC bridge
-├── renderer.js          # Overlay UI logic
-├── index.html           # Overlay interface
-└── services/
-    ├── asr.js           # Speech recognition
-    ├── llm.js           # Language model integration
-    └── database.js      # Encrypted data storage
-```
-
-### Building
 ```bash
-# Development build
+cd electron-app
+npm install
+```
+
+### 4. Install Root Dependencies
+
+```bash
+cd ..  # Back to project root
+npm install
+```
+
+## 🎮 Development
+
+### Start Development Environment
+
+From the project root:
+
+```bash
+# Start both Python backend and Electron app
 npm run dev
+```
 
-# Production build
+This will:
+1. Start FastAPI backend on `http://127.0.0.1:8000`
+2. Start Vite dev server on `http://localhost:5173`
+3. Launch Electron with hot reload
+
+### Individual Services
+
+```bash
+# Start only Python backend
+npm run dev:python
+
+# Start only Electron app
+npm run dev:electron
+```
+
+### Access API Documentation
+
+While the backend is running, visit:
+- Swagger UI: `http://127.0.0.1:8000/docs`
+- ReDoc: `http://127.0.0.1:8000/redoc`
+
+## 🏗️ Build
+
+### Build for Production
+
+```bash
+# Build Python backend
+npm run build:python
+
+# Build Electron app
+npm run build:electron
+
+# Build everything
 npm run build
+```
 
-# Create distributables
+### Create Distributables
+
+```bash
+cd electron-app
+
+# macOS
+npm run dist
+
+# Windows (cross-compile may require additional setup)
+npm run dist
+
+# Linux
 npm run dist
 ```
 
-### Testing
+Distributables will be in `dist/` directory.
+
+## 🧪 Testing
+
 ```bash
-# Run tests (when implemented)
+# Test Python backend
+npm run test:python
+
+# Test Electron app
+npm run test:electron
+
+# Test everything
 npm test
-
-# Lint code
-npm run lint
 ```
 
-## API Reference
+## 📁 Project Structure
 
-### ASR Service
-```javascript
-// Initialize with model size
-await ASRService.initialize('tiny');
-
-// Start session
-await ASRService.startSession(sessionId, options);
-
-// Get current transcript
-const transcript = await ASRService.getPartialTranscript();
-
-// Stop session
-await ASRService.stopSession();
+```
+echo/
+├── python-workers/              # FastAPI backend
+│   ├── app/
+│   │   ├── main.py              # FastAPI app entry
+│   │   ├── routes/              # API endpoints
+│   │   │   ├── asr.py           # Speech recognition
+│   │   │   ├── llm.py           # LLM operations
+│   │   │   ├── context.py       # Context management
+│   │   │   ├── ocr.py           # OCR
+│   │   │   └── voice.py         # Voice processing
+│   │   └── core/                # Business logic
+│   │       ├── asr_whisper.py   # Whisper integration
+│   │       ├── llm_router.py    # Ollama client
+│   │       ├── vectorstore.py   # ChromaDB
+│   │       ├── embedder.py      # Sentence transformers
+│   │       ├── ocr_engine.py    # Tesseract/EasyOCR
+│   │       ├── voice_engine.py  # Audio analysis
+│   │       └── redactor.py      # PII detection
+│   └── requirements.txt
+│
+├── electron-app/                # Electron + React
+│   ├── main/                    # Electron main process
+│   │   ├── index.ts             # App lifecycle
+│   │   └── ipc/                 # IPC handlers
+│   ├── preload/                 # Secure bridge
+│   │   └── index.ts
+│   └── renderer/                # React UI
+│       ├── src/
+│       │   ├── main.tsx         # React entry
+│       │   ├── App.tsx          # Root component
+│       │   ├── pages/           # Page components
+│       │   ├── components/      # Reusable components
+│       │   └── i18n.ts          # Translations
+│       └── index.html
+│
+└── package.json                 # Root workspace config
 ```
 
-### LLM Service
-```javascript
-// Get suggestions with context
-const suggestions = await LLMService.getSuggestions(context, {
-  pipeline: 'interview',
-  sessionId: sessionId,
-  redactPII: true
-});
+## ⚙️ Configuration
 
-// Generate session summary
-const summary = await LLMService.generateSessionSummary(sessionId);
-```
+### Environment Variables
 
-### Database Service
-```javascript
-// Create session
-const sessionId = await DatabaseService.createSession(type, mode, title);
+Create a `.env` file in the project root (or copy `.env.example`):
 
-// Save transcript
-await DatabaseService.addTranscript(sessionId, speaker, text, confidence);
-
-// Get session data
-const session = await DatabaseService.getSession(sessionId);
-```
-
-## Troubleshooting
-
-### Common Issues
-
-#### Audio Not Working
-1. Check microphone permissions in System Preferences
-2. Verify audio loopback is installed correctly
-3. Test with different audio sources
-
-#### LLM Not Responding
-1. Verify API keys are correctly set
-2. Check internet connection
-3. Review rate limits for your provider
-
-#### Overlay Not Visible
-1. Check if stealth mode is enabled
-2. Verify window is not minimized
-3. Try toggling with `Alt+Shift+E`
-
-#### Performance Issues
-1. Try a smaller Whisper model (tiny/base)
-2. Reduce audio quality settings
-3. Close other resource-intensive applications
-
-### Debug Mode
-Enable debug logging by setting:
 ```bash
-DEBUG=echo:* npm start
+# Backend
+BACKEND_PORT=8000
+BACKEND_HOST=127.0.0.1
+
+# Ollama
+OLLAMA_HOST=http://localhost:11434
+
+# Whisper
+WHISPER_MODEL=base
+WHISPER_DEVICE=cpu
+
+# Embeddings
+EMBEDDING_MODEL=all-MiniLM-L6-v2
+CHROMA_PERSIST_DIR=./data/chroma
+
+# Privacy
+LOCAL_ONLY=true
+PII_REDACTION=true
 ```
 
-### Logs Location
-- **macOS**: `~/Library/Logs/echo/`
-- **Windows**: `%APPDATA%/echo/logs/`
+### Whisper Models
 
-## Contributing
+Available models (size/accuracy trade-off):
+- `tiny` - 39 MB, fastest
+- `base` - 74 MB, good balance ✅
+- `small` - 244 MB, better accuracy
+- `medium` - 769 MB, high accuracy
+- `large` - 1550 MB, best accuracy
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+### Ollama Models
 
-### Development Setup
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+Recommended models:
+- `llama3` - Fast and capable ✅
+- `mistral` - Good for reasoning
+- `codellama` - Optimized for code
+- `phi3` - Very lightweight
 
-## License
+Pull models with: `ollama pull <model-name>`
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## 🔧 Troubleshooting
 
-## Privacy Policy
+### Backend Not Starting
 
-Echo is designed with privacy as a core principle:
-- All speech recognition happens locally
-- No data is sent to external servers without explicit consent
-- All stored data is encrypted
-- Users have full control over data retention and deletion
+**Issue**: Python backend fails to start
 
-## Support
+**Solutions**:
+```bash
+# Check Python version
+python --version  # Should be 3.10+
 
-- **Documentation**: [docs.echo.copilot](https://docs.echo.copilot)
-- **Issues**: [GitHub Issues](https://github.com/criticalsuccess/echo/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/criticalsuccess/echo/discussions)
-- **Email**: support@echo.copilot
+# Recreate virtual environment
+cd python-workers
+rm -rf .venv
+python -m venv .venv
+source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+pip install -r requirements.txt
+```
 
-## Roadmap
+### Ollama Not Connecting
 
-### Version 1.1 (Q2 2024)
-- [ ] Atlassian OAuth integration
+**Issue**: LLM requests fail with "Ollama not available"
+
+**Solutions**:
+```bash
+# Check if Ollama is running
+curl http://localhost:11434/api/tags
+
+# Start Ollama (if not running)
+ollama serve
+
+# Pull a model
+ollama pull llama3
+
+# Check models
+ollama list
+```
+
+### Whisper Not Loading
+
+**Issue**: ASR requests return stub responses
+
+**Solutions**:
+```bash
+# Install PyTorch with appropriate backend
+# CPU-only (smaller):
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+# CUDA (GPU):
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+# Reinstall faster-whisper
+pip install --upgrade faster-whisper
+```
+
+### Electron Won't Start
+
+**Issue**: Electron fails to launch
+
+**Solutions**:
+```bash
+# Clean and reinstall
+cd electron-app
+rm -rf node_modules dist
+npm install
+npm run build:main
+
+# Check for errors
+npm run dev:main
+```
+
+## 🌍 Internationalization
+
+Echo supports multiple languages:
+- English (en)
+- Turkish (tr)
+- French (fr)
+
+Add more languages in `electron-app/renderer/src/i18n.ts`.
+
+## 🔒 Privacy & Security
+
+- **Local Processing**: All transcription and LLM inference happens on your device
+- **PII Redaction**: Automatic detection and masking of sensitive information
+- **No Telemetry**: Zero data sent to external servers
+- **Encrypted Storage**: Secure credential and data storage
+- **Sandboxed Renderer**: Electron security best practices
+
+## 📝 License
+
+ISC License - see LICENSE file
+
+## 🤝 Contributing
+
+Contributions welcome! Please read CONTRIBUTING.md first.
+
+## 📚 Documentation
+
+- [API Documentation](http://127.0.0.1:8000/docs) (when running)
+- [Architecture Guide](BUILD.md)
+- [Security Improvements](SECURITY_IMPROVEMENTS.md)
+
+## 🎯 Roadmap
+
+- [ ] Real-time audio streaming with WebSocket
+- [ ] Advanced OCR with layout analysis
+- [ ] Voice cloning integration
+- [ ] Multi-language ASR
+- [ ] Cloud model fallback (optional)
+- [ ] Session recording and replay
 - [ ] Advanced analytics dashboard
-- [ ] Custom prompt templates
-- [ ] Team collaboration features
-
-### Version 1.2 (Q3 2024)
-- [ ] Mobile companion app
-- [ ] Advanced simulation modes
-- [ ] Integration with more tools (Notion, Linear, etc.)
-- [ ] Multi-language support
-
-### Version 2.0 (Q4 2024)
-- [ ] Custom model training
-- [ ] Advanced privacy controls
-- [ ] Enterprise features
-- [ ] API for third-party integrations
 
 ---
 
-Made with ❤️ by the CriticalSuccess team
+**Made with ❤️ by CriticalSuccess**
