@@ -20,6 +20,7 @@ export interface EchoAPI {
   contextLoad: (path: string) => Promise<any>;
   contextSearch: (query: string) => Promise<any>;
   contextClear: () => Promise<any>;
+  contextStats: () => Promise<any>;
   
   // LLM
   models: () => Promise<any>;
@@ -47,6 +48,7 @@ contextBridge.exposeInMainWorld('echo', {
   contextLoad: (path: string) => ipcRenderer.invoke('context:load', path),
   contextSearch: (query: string) => ipcRenderer.invoke('context:search', query),
   contextClear: () => ipcRenderer.invoke('context:clear'),
+  contextStats: () => ipcRenderer.invoke('context:stats'),
   
   // LLM
   models: () => ipcRenderer.invoke('llm:models'),

@@ -61,6 +61,21 @@ ipcMain.handle('context:clear', async (): Promise<any> => {
   }
 });
 
+ipcMain.handle('context:stats', async (): Promise<any> => {
+  try {
+    const response = await fetch(`${API_BASE}/context/stats`);
+    
+    if (response.ok) {
+      return await response.json();
+    }
+    
+    return { error: `HTTP ${response.status}` };
+  } catch (error) {
+    console.error('[IPC Context] Stats error:', error);
+    return { error: String(error) };
+  }
+});
+
 
 
 
