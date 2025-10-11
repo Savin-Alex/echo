@@ -7,10 +7,10 @@
   "scripts": {
     "dev": "concurrently -n MAIN,VITE \"npm run dev:main\" \"npm run dev:vite\"",
     "dev:main": "tsc -p tsconfig.main.json && electron dist/main/index.js --dev",
-    "dev:vite": "vite",
+    "dev:vite": "cd renderer && vite",
     "build": "npm run build:main && npm run build:renderer",
     "build:main": "tsc -p tsconfig.main.json",
-    "build:renderer": "vite build",
+    "build:renderer": "cd renderer && vite build",
     "dist": "npm run build && electron-builder",
     "lint": "eslint . --ext .ts,.tsx"
   },
