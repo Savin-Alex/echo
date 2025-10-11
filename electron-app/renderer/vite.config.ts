@@ -6,7 +6,8 @@ export default defineConfig({
   base: './',
   server: {
     port: 5173,
-    strictPort: true
+    strictPort: true,  // Fail instead of auto-bumping to prevent black screen
+    host: 'localhost'
   },
   build: {
     outDir: 'dist',
