@@ -293,3 +293,4 @@ echo ""
 print_success "Setup complete! Run 'npm run dev' to start Echo Copilot"
 echo ""
 
+

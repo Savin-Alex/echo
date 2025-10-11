@@ -276,3 +276,4 @@ Your Echo Copilot installation is **complete** and **verified**.
 
 **Questions?** Check troubleshooting in INSTALL_GUIDE.md or open an issue on GitHub.
 
+

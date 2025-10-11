@@ -12,6 +12,59 @@
 // const { GoogleGenerativeAI } = require('@google/generative-ai'); // Commented out for now
 const DatabaseService = require('./database');
 const { EventEmitter } = require('events');
+const crypto = require('crypto');
+
+// Security: Provider abstraction with timeouts and validation
+class LLMProvider {
+  constructor(config) {
+    this.name = config.name;
+    this.apiKey = config.apiKey;
+    this.timeoutMs = config.timeoutMs || 30000;
+    this.maxRetries = config.maxRetries || 3;
+    this.retryDelay = config.retryDelay || 1000;
+  }
+
+  async generate(messages, system, options = {}) {
+    // This would be implemented by specific providers
+    console.warn('Provider not implemented, returning empty response');
+    return { suggestions: [], meta: { disabled: true } };
+  }
+
+  async withRetry(operation) {
+    let lastError;
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      try {
+        return await this.withTimeout(operation, this.timeoutMs);
+      } catch (error) {
+        lastError = error;
+        if (attempt < this.maxRetries && this.shouldRetry(error)) {
+          const delay = this.retryDelay * Math.pow(2, attempt - 1); // Exponential backoff
+          await this.sleep(delay);
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw lastError;
+  }
+
+  async withTimeout(operation, timeoutMs) {
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Request timeout')), timeoutMs);
+    });
+    return Promise.race([operation(), timeoutPromise]);
+  }
+
+  shouldRetry(error) {
+    // Retry on rate limits and server errors
+    const retryableCodes = [429, 500, 502, 503, 504];
+    return retryableCodes.includes(error.status) || error.message.includes('timeout');
+  }
+
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
 
 class LLMService extends EventEmitter {
   constructor() {
@@ -39,6 +92,22 @@ class LLMService extends EventEmitter {
       anthropic: { requests: 0, resetTime: Date.now() },
       google: { requests: 0, resetTime: Date.now() }
     };
+    
+    // Security: Prompt injection prevention
+    this.dangerousPatterns = [
+      /ignore previous instructions?/i,
+      /forget everything/i,
+      /system prompt/i,
+      /you are now/i,
+      /act as if/i,
+      /pretend to be/i,
+      /roleplay as/i
+    ];
+    
+    this.blockedCommands = [
+      'execute', 'run', 'eval', 'system', 'shell', 'cmd',
+      'sudo', 'admin', 'root', 'delete', 'drop', 'truncate'
+    ];
   }
 
   async initialize(config = {}) {
@@ -70,6 +139,17 @@ class LLMService extends EventEmitter {
     } = options;
 
     try {
+      // Security: Validate and sanitize input
+      if (!this.validateInput(context, pipeline)) {
+        throw new Error('Invalid input detected');
+      }
+      
+      // Security: Check for prompt injection
+      if (this.detectPromptInjection(context)) {
+        console.warn('Potential prompt injection detected, using fallback');
+        return this.getFallbackSuggestions(pipeline);
+      }
+
       // Check cache first
       const cacheKey = this.generateCacheKey(context, pipeline);
       if (useCache && this.responseCache.has(cacheKey)) {
@@ -88,11 +168,17 @@ class LLMService extends EventEmitter {
       // Build prompt
       const prompt = this.buildPrompt(pipeline, enrichedContext, options);
 
-      // Generate response
+      // Generate response with timeout
       const response = await this.generateResponse(prompt, options);
 
       // Parse and format suggestions
       const suggestions = this.parseSuggestions(response);
+      
+      // Security: Validate response
+      if (!this.validateResponse(suggestions)) {
+        console.warn('Invalid response detected, using fallback');
+        return this.getFallbackSuggestions(pipeline);
+      }
 
       // Cache response
       if (useCache) {
@@ -116,12 +202,25 @@ class LLMService extends EventEmitter {
   async generateResponse(prompt, options = {}) {
     const provider = options.provider || this.currentProvider;
     
+    // Check if provider is disabled
+    if (!provider || !this.providers[provider]) {
+      console.warn('No provider available, returning fallback suggestions');
+      return this.getFallbackSuggestions(options.pipeline || 'interview').join('\n');
+    }
+    
     // Check rate limits
     if (!this.checkRateLimit(provider)) {
-      throw new Error(`Rate limit exceeded for ${provider}`);
+      console.warn(`Rate limit exceeded for ${provider}, using fallback`);
+      return this.getFallbackSuggestions(options.pipeline || 'interview').join('\n');
     }
 
     try {
+      // Security: Validate prompt before sending
+      if (!this.validatePrompt(prompt)) {
+        console.warn('Invalid prompt detected, using fallback');
+        return this.getFallbackSuggestions(options.pipeline || 'interview').join('\n');
+      }
+      
       switch (provider) {
         case 'openai':
           return await this.generateWithOpenAI(prompt, options);
@@ -130,7 +229,8 @@ class LLMService extends EventEmitter {
         case 'google':
           return await this.generateWithGoogle(prompt, options);
         default:
-          throw new Error(`Unknown provider: ${provider}`);
+          console.warn(`Unknown provider: ${provider}, using fallback`);
+          return this.getFallbackSuggestions(options.pipeline || 'interview').join('\n');
       }
     } catch (error) {
       console.error(`Error with ${provider}:`, error);
@@ -139,7 +239,8 @@ class LLMService extends EventEmitter {
       if (fallbackProvider && fallbackProvider !== provider) {
         return await this.generateResponse(prompt, { ...options, provider: fallbackProvider });
       }
-      throw error;
+      // Return fallback suggestions instead of throwing
+      return this.getFallbackSuggestions(options.pipeline || 'interview').join('\n');
     }
   }
 
@@ -284,13 +385,20 @@ Provide 2-3 response options with different tones if appropriate.`;
     return enriched;
   }
 
+  // Security: Enhanced PII redaction
   redactPII(text) {
-    // Simple PII redaction - in production, use more sophisticated methods
+    if (!text || typeof text !== 'string') return text;
+    
     const patterns = [
       { regex: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, replacement: '[EMAIL]' },
       { regex: /\b\d{3}-\d{2}-\d{4}\b/g, replacement: '[SSN]' },
       { regex: /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, replacement: '[CARD]' },
-      { regex: /\b\d{3}-\d{3}-\d{4}\b/g, replacement: '[PHONE]' }
+      { regex: /\b\d{3}-\d{3}-\d{4}\b/g, replacement: '[PHONE]' },
+      { regex: /\b[A-Z][a-z]+ [A-Z][a-z]+\b/g, replacement: '[NAME]' }, // Simple name pattern
+      { regex: /\b\d{1,5}\s+[A-Za-z0-9\s]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr)\b/gi, replacement: '[ADDRESS]' },
+      { regex: /\b[A-Z]{2}\s+\d{5}(?:-\d{4})?\b/g, replacement: '[ZIP]' },
+      { regex: /\b(?:password|passwd|pwd)\s*[:=]\s*[^\s]+/gi, replacement: '[PASSWORD]' },
+      { regex: /\b(?:token|key|secret)\s*[:=]\s*[^\s]+/gi, replacement: '[CREDENTIAL]' }
     ];
 
     let redacted = text;
@@ -299,6 +407,95 @@ Provide 2-3 response options with different tones if appropriate.`;
     });
 
     return redacted;
+  }
+
+  // Security: Input validation
+  validateInput(context, pipeline) {
+    if (!context || typeof context !== 'string') {
+      return false;
+    }
+    
+    // Check length limits
+    if (context.length > 50000) {
+      return false;
+    }
+    
+    // Check for allowed pipelines
+    const allowedPipelines = ['interview', 'meeting', 'jira', 'confluence', 'chat'];
+    if (!allowedPipelines.includes(pipeline)) {
+      return false;
+    }
+    
+    return true;
+  }
+
+  // Security: Prompt injection detection
+  detectPromptInjection(text) {
+    if (!text || typeof text !== 'string') return false;
+    
+    const lowerText = text.toLowerCase();
+    
+    // Check for dangerous patterns
+    for (const pattern of this.dangerousPatterns) {
+      if (pattern.test(lowerText)) {
+        return true;
+      }
+    }
+    
+    // Check for blocked commands
+    for (const command of this.blockedCommands) {
+      if (lowerText.includes(command)) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  // Security: Prompt validation
+  validatePrompt(prompt) {
+    if (!prompt || typeof prompt !== 'object') {
+      return false;
+    }
+    
+    // Check for required fields
+    if (!prompt.system || !prompt.user) {
+      return false;
+    }
+    
+    // Check lengths
+    if (prompt.system.length > 2000 || prompt.user.length > 8000) {
+      return false;
+    }
+    
+    return true;
+  }
+
+  // Security: Response validation
+  validateResponse(suggestions) {
+    if (!Array.isArray(suggestions)) {
+      return false;
+    }
+    
+    // Check suggestion count
+    if (suggestions.length > 10) {
+      return false;
+    }
+    
+    // Validate each suggestion
+    return suggestions.every(suggestion => {
+      if (typeof suggestion !== 'string') {
+        return false;
+      }
+      
+      // Check length
+      if (suggestion.length > 1000) {
+        return false;
+      }
+      
+      // Check for suspicious content
+      return !this.detectPromptInjection(suggestion);
+    });
   }
 
   parseSuggestions(response) {
@@ -410,6 +607,45 @@ Provide 2-3 response options with different tones if appropriate.`;
     return fallbacks[pipeline] || fallbacks.interview;
   }
 
+  // Security: Token budgeting
+  truncateByTokens(text, maxTokens = 1000) {
+    if (!text) return text;
+    
+    // Simple token estimation (4 chars ≈ 1 token)
+    const estimatedTokens = Math.ceil(text.length / 4);
+    
+    if (estimatedTokens <= maxTokens) {
+      return text;
+    }
+    
+    // Truncate to approximate token limit
+    const maxChars = maxTokens * 4;
+    return text.substring(0, maxChars) + '...';
+  }
+
+  // Security: Context sanitization
+  sanitizeContext(context) {
+    if (!context || typeof context !== 'object') {
+      return context;
+    }
+    
+    const sanitized = {};
+    for (const [key, value] of Object.entries(context)) {
+      if (typeof value === 'string') {
+        // Remove URLs and markdown
+        sanitized[key] = value
+          .replace(/https?:\/\/[^\s]+/g, '[URL]')
+          .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+          .replace(/\*\*([^*]+)\*\*/g, '$1')
+          .replace(/\*([^*]+)\*/g, '$1');
+      } else {
+        sanitized[key] = value;
+      }
+    }
+    
+    return sanitized;
+  }
+
   // Analytics and metrics
   async generateSessionSummary(sessionId) {
     try {
@@ -457,9 +693,12 @@ Participants: ${session.source_app || 'Unknown'}`;
   // Provider management
   setProvider(provider) {
     if (!this.providers[provider]) {
-      throw new Error(`Provider ${provider} not initialized`);
+      console.warn(`Provider ${provider} not initialized, disabling LLM`);
+      this.currentProvider = null;
+      return false;
     }
     this.currentProvider = provider;
+    return true;
   }
 
   getAvailableProviders() {

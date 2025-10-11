@@ -760,3 +760,4 @@ You're now running a privacy-first AI assistant entirely on your own computer.
 
 **Happy chatting with your local AI! 🤖**
 
+

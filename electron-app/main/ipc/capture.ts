@@ -24,3 +24,4 @@ ipcMain.handle('capture:stop', async (): Promise<any> => {
 
 
 
+

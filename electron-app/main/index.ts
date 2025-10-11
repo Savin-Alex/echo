@@ -106,11 +106,26 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      webSecurity: true
+      webSecurity: true,
+      devTools: isDev // Enable devTools only in development
     },
     backgroundColor: '#1a1a1a',
     show: false // Show after ready-to-show
   });
+  
+  // Set Content Security Policy for production
+  if (!isDev) {
+    mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://127.0.0.1:8000"
+          ]
+        }
+      });
+    });
+  }
   
   // Show window when ready
   mainWindow.once('ready-to-show', () => {
@@ -191,6 +206,7 @@ process.on('uncaughtException', (error: Error) => {
 process.on('unhandledRejection', (reason: any) => {
   console.error('[Main] Unhandled rejection:', reason);
 });
+
 
 
 

@@ -190,10 +190,16 @@ class EchoRenderer {
       const coachingItem = document.createElement('div');
       coachingItem.classList.add('coaching-item');
       
-      coachingItem.innerHTML = `
-        <span class="coaching-icon">${item.icon}</span>
-        <span>${item.text}</span>
-      `;
+      // Security: Use textContent instead of innerHTML to prevent XSS
+      const iconSpan = document.createElement('span');
+      iconSpan.classList.add('coaching-icon');
+      iconSpan.textContent = item.icon;
+      
+      const textSpan = document.createElement('span');
+      textSpan.textContent = item.text;
+      
+      coachingItem.appendChild(iconSpan);
+      coachingItem.appendChild(textSpan);
       
       this.coachingContent.appendChild(coachingItem);
     });
@@ -242,18 +248,38 @@ class EchoRenderer {
     const text = typeof suggestion === 'string' ? suggestion : suggestion.text;
     const confidence = typeof suggestion === 'object' ? suggestion.confidence : 0.9;
 
-    div.innerHTML = `
-      <div class="suggestion-text">${text}</div>
-      <div class="suggestion-meta">
-        <span>Suggestion ${index + 1}</span>
-        <div class="suggestion-confidence">
-          <span>${Math.round(confidence * 100)}%</span>
-          <div class="confidence-bar">
-            <div class="confidence-fill" style="width: ${confidence * 100}%"></div>
-          </div>
-        </div>
-      </div>
-    `;
+    // Security: Use textContent and createElement instead of innerHTML
+    const textDiv = document.createElement('div');
+    textDiv.classList.add('suggestion-text');
+    textDiv.textContent = text;
+    
+    const metaDiv = document.createElement('div');
+    metaDiv.classList.add('suggestion-meta');
+    
+    const suggestionNumberSpan = document.createElement('span');
+    suggestionNumberSpan.textContent = `Suggestion ${index + 1}`;
+    
+    const confidenceDiv = document.createElement('div');
+    confidenceDiv.classList.add('suggestion-confidence');
+    
+    const confidenceSpan = document.createElement('span');
+    confidenceSpan.textContent = `${Math.round(confidence * 100)}%`;
+    
+    const confidenceBarDiv = document.createElement('div');
+    confidenceBarDiv.classList.add('confidence-bar');
+    
+    const confidenceFillDiv = document.createElement('div');
+    confidenceFillDiv.classList.add('confidence-fill');
+    confidenceFillDiv.style.width = `${confidence * 100}%`;
+    
+    confidenceBarDiv.appendChild(confidenceFillDiv);
+    confidenceDiv.appendChild(confidenceSpan);
+    confidenceDiv.appendChild(confidenceBarDiv);
+    metaDiv.appendChild(suggestionNumberSpan);
+    metaDiv.appendChild(confidenceDiv);
+    
+    div.appendChild(textDiv);
+    div.appendChild(metaDiv);
 
     return div;
   }
@@ -273,24 +299,47 @@ class EchoRenderer {
   }
 
   showEmptyState() {
-    this.suggestionsContainer.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">💭</div>
-        <div>Waiting for suggestions...</div>
-        <div style="font-size: 0.7rem; margin-top: 0.5rem; opacity: 0.6;">
-          Press Alt+Shift+S for suggestions
-        </div>
-      </div>
-    `;
+    this.suggestionsContainer.innerHTML = '';
+    
+    const emptyStateDiv = document.createElement('div');
+    emptyStateDiv.classList.add('empty-state');
+    
+    const iconDiv = document.createElement('div');
+    iconDiv.classList.add('empty-icon');
+    iconDiv.textContent = '💭';
+    
+    const mainTextDiv = document.createElement('div');
+    mainTextDiv.textContent = 'Waiting for suggestions...';
+    
+    const subTextDiv = document.createElement('div');
+    subTextDiv.style.fontSize = '0.7rem';
+    subTextDiv.style.marginTop = '0.5rem';
+    subTextDiv.style.opacity = '0.6';
+    subTextDiv.textContent = 'Press Alt+Shift+S for suggestions';
+    
+    emptyStateDiv.appendChild(iconDiv);
+    emptyStateDiv.appendChild(mainTextDiv);
+    emptyStateDiv.appendChild(subTextDiv);
+    
+    this.suggestionsContainer.appendChild(emptyStateDiv);
   }
 
   showLoadingState() {
-    this.suggestionsContainer.innerHTML = `
-      <div class="loading">
-        <div class="loading-spinner"></div>
-        <span>Generating suggestions...</span>
-      </div>
-    `;
+    this.suggestionsContainer.innerHTML = '';
+    
+    const loadingDiv = document.createElement('div');
+    loadingDiv.classList.add('loading');
+    
+    const spinnerDiv = document.createElement('div');
+    spinnerDiv.classList.add('loading-spinner');
+    
+    const textSpan = document.createElement('span');
+    textSpan.textContent = 'Generating suggestions...';
+    
+    loadingDiv.appendChild(spinnerDiv);
+    loadingDiv.appendChild(textSpan);
+    
+    this.suggestionsContainer.appendChild(loadingDiv);
   }
 
   selectSuggestion(suggestionElement) {
@@ -370,34 +419,65 @@ class EchoRenderer {
 window.addEventListener('DOMContentLoaded', () => {
   const renderer = new EchoRenderer();
 
+  // Ensure window.echo is available with safe fallbacks
+  window.echo = window.echo || {};
+  
   // Subscribe to suggestion events from the main process
-  window.echo.onSuggestions((suggestions, options) => {
-    renderer.displaySuggestions(suggestions, options);
-  });
+  if (window.echo.onSuggestions) {
+    window.echo.onSuggestions((suggestions, options) => {
+      renderer.displaySuggestions(suggestions, options);
+    });
+  } else {
+    console.warn('window.echo.onSuggestions not available');
+  }
 
   // Subscribe to web lookup events
-  window.echo.onWebLookup(() => {
-    renderer.suggestionsContainer.innerHTML = `
-      <div class="suggestion">
-        <div class="suggestion-text">Web lookup feature coming soon...</div>
-        <div class="suggestion-meta">
-          <span>Feature Preview</span>
-        </div>
-      </div>
-    `;
-  });
+  if (window.echo.onWebLookup) {
+    window.echo.onWebLookup(() => {
+      renderer.suggestionsContainer.innerHTML = '';
+      
+      const suggestionDiv = document.createElement('div');
+      suggestionDiv.classList.add('suggestion');
+      
+      const textDiv = document.createElement('div');
+      textDiv.classList.add('suggestion-text');
+      textDiv.textContent = 'Web lookup feature coming soon...';
+      
+      const metaDiv = document.createElement('div');
+      metaDiv.classList.add('suggestion-meta');
+      
+      const metaSpan = document.createElement('span');
+      metaSpan.textContent = 'Feature Preview';
+      
+      metaDiv.appendChild(metaSpan);
+      suggestionDiv.appendChild(textDiv);
+      suggestionDiv.appendChild(metaDiv);
+      
+      renderer.suggestionsContainer.appendChild(suggestionDiv);
+    });
+  } else {
+    console.warn('window.echo.onWebLookup not available');
+  }
 
   // Subscribe to transcript updates
-  window.echo.onTranscript?.((transcript) => {
-    // Update coaching based on new transcript
-    renderer.generateCoachingPrompt();
-  });
+  if (window.echo.onTranscript) {
+    window.echo.onTranscript((transcript) => {
+      // Update coaching based on new transcript
+      renderer.generateCoachingPrompt();
+    });
+  } else {
+    console.warn('window.echo.onTranscript not available');
+  }
 
   // Subscribe to session updates
-  window.echo.onSessionUpdate?.((session) => {
-    renderer.currentSessionId = session.id;
-    renderer.updateStatus(session.isActive ? 'active' : 'inactive');
-  });
+  if (window.echo.onSessionUpdate) {
+    window.echo.onSessionUpdate((session) => {
+      renderer.currentSessionId = session.id;
+      renderer.updateStatus(session.isActive ? 'active' : 'inactive');
+    });
+  } else {
+    console.warn('window.echo.onSessionUpdate not available');
+  }
 
   // Make renderer available globally for debugging
   window.echoRenderer = renderer;

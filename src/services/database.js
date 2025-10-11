@@ -7,10 +7,19 @@
  */
 
 const Database = require('better-sqlite3');
-const CryptoJS = require('crypto-js');
+const crypto = require('crypto');
 const path = require('path');
 const { app } = require('electron');
 const fs = require('fs');
+
+// Try to load keytar, fallback to file-based storage if not available
+let keytar;
+try {
+  keytar = require('keytar');
+} catch (error) {
+  console.warn('keytar not available, using file-based key storage');
+  keytar = null;
+}
 
 class DatabaseService {
   constructor() {
@@ -19,6 +28,7 @@ class DatabaseService {
     this.serviceName = 'echo-copilot';
     this.accountName = 'encryption-key';
     this.dbPath = path.join(app.getPath('userData'), 'echo.db');
+    this.keyPath = path.join(app.getPath('userData'), 'echo.key');
   }
 
   async initialize() {
@@ -41,15 +51,28 @@ class DatabaseService {
 
   async initializeEncryptionKey() {
     try {
-      // For now, use a simple key generation (in production, use OS keychain)
-      const keyPath = path.join(app.getPath('userData'), 'echo.key');
-      
-      if (fs.existsSync(keyPath)) {
-        this.encryptionKey = fs.readFileSync(keyPath, 'utf8');
+      if (keytar) {
+        // Use OS keychain for secure key storage
+        let key = await keytar.getPassword(this.serviceName, this.accountName);
+        
+        if (!key) {
+          // Generate new key and store in keychain
+          key = crypto.randomBytes(32).toString('base64');
+          await keytar.setPassword(this.serviceName, this.accountName, key);
+        }
+        
+        this.encryptionKey = Buffer.from(key, 'base64');
       } else {
-        // Generate new key
-        this.encryptionKey = CryptoJS.lib.WordArray.random(32).toString();
-        fs.writeFileSync(keyPath, this.encryptionKey, { mode: 0o600 });
+        // Fallback to file-based storage (less secure)
+        if (fs.existsSync(this.keyPath)) {
+          const keyData = fs.readFileSync(this.keyPath, 'utf8');
+          this.encryptionKey = Buffer.from(keyData, 'base64');
+        } else {
+          // Generate new key
+          const key = crypto.randomBytes(32);
+          this.encryptionKey = key;
+          fs.writeFileSync(this.keyPath, key.toString('base64'), { mode: 0o600 });
+        }
       }
     } catch (error) {
       console.error('Failed to initialize encryption key:', error);
@@ -69,12 +92,22 @@ class DatabaseService {
       this.db.pragma('journal_mode = WAL');
       this.db.pragma('synchronous = NORMAL');
     } catch (error) {
-      console.error('Failed to initialize database connection:', error);
-      throw error;
+      console.error('Failed to initialize database connection, falling back to in-memory:', error);
+      // Fall back to in-memory database instead of crashing
+      this.db = new Database(':memory:');
+      this.db.pragma('journal_mode = WAL');
+      this.db.pragma('synchronous = NORMAL');
+      this.inMemory = true;
     }
   }
 
   createTables() {
+    // Set up database with security pragmas
+    this.db.pragma('journal_mode = WAL');
+    this.db.pragma('synchronous = NORMAL');
+    this.db.pragma('foreign_keys = ON');
+    this.db.pragma('secure_delete = ON');
+    
     const tables = [
       // Sessions table
       `CREATE TABLE IF NOT EXISTS sessions (
@@ -184,16 +217,50 @@ class DatabaseService {
     });
   }
 
-  // Encryption/Decryption methods
-  encrypt(text) {
-    if (!text) return null;
-    return CryptoJS.AES.encrypt(text, this.encryptionKey).toString();
+  // Encryption/Decryption methods using AES-256-GCM
+  encrypt(plaintext) {
+    if (!plaintext) return null;
+    
+    try {
+      const iv = crypto.randomBytes(12); // 96-bit IV for GCM
+      const cipher = crypto.createCipheriv('aes-256-gcm', this.encryptionKey, iv);
+      
+      let encrypted = cipher.update(plaintext, 'utf8');
+      encrypted = Buffer.concat([encrypted, cipher.final()]);
+      
+      const authTag = cipher.getAuthTag();
+      
+      // Combine IV + authTag + encrypted data
+      const combined = Buffer.concat([iv, authTag, encrypted]);
+      return combined.toString('base64');
+    } catch (error) {
+      console.error('Encryption error:', error);
+      throw error;
+    }
   }
 
-  decrypt(encryptedText) {
-    if (!encryptedText) return null;
-    const bytes = CryptoJS.AES.decrypt(encryptedText, this.encryptionKey);
-    return bytes.toString(CryptoJS.enc.Utf8);
+  decrypt(encryptedData) {
+    if (!encryptedData) return null;
+    
+    try {
+      const combined = Buffer.from(encryptedData, 'base64');
+      
+      // Extract components
+      const iv = combined.subarray(0, 12);
+      const authTag = combined.subarray(12, 28);
+      const encrypted = combined.subarray(28);
+      
+      const decipher = crypto.createDecipheriv('aes-256-gcm', this.encryptionKey, iv);
+      decipher.setAuthTag(authTag);
+      
+      let decrypted = decipher.update(encrypted, null, 'utf8');
+      decrypted += decipher.final('utf8');
+      
+      return decrypted;
+    } catch (error) {
+      console.error('Decryption error:', error);
+      throw error;
+    }
   }
 
   // Session management
@@ -422,15 +489,38 @@ class DatabaseService {
   }
 
   // Privacy controls
-  wipeAllData() {
+  async wipeAllData() {
     const tables = [
       'sessions', 'transcripts', 'suggestions', 'actions', 
       'integrations', 'profiles', 'metrics', 'context_cache'
     ];
     
-    tables.forEach(table => {
-      this.db.prepare(`DELETE FROM ${table}`).run();
+    // Use transaction for atomicity
+    const transaction = this.db.transaction(() => {
+      tables.forEach(table => {
+        this.db.prepare(`DELETE FROM ${table}`).run();
+      });
     });
+    
+    transaction();
+    
+    // Also remove encryption key from keychain
+    if (keytar) {
+      try {
+        await keytar.deletePassword(this.serviceName, this.accountName);
+      } catch (error) {
+        console.error('Error removing key from keychain:', error);
+      }
+    }
+    
+    // Remove key file if it exists
+    if (fs.existsSync(this.keyPath)) {
+      try {
+        fs.unlinkSync(this.keyPath);
+      } catch (error) {
+        console.error('Error removing key file:', error);
+      }
+    }
   }
 
   close() {

@@ -302,3 +302,4 @@ Write-Host ""
 Print-Success "Setup complete! Run 'npm run dev' to start Echo Copilot"
 Write-Host ""
 
+

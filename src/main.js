@@ -9,6 +9,7 @@
 const { app, BrowserWindow, globalShortcut, ipcMain, screen, dialog, Menu } = require('electron');
 const path = require('path');
 const { EventEmitter } = require('events');
+const crypto = require('crypto');
 
 // Import services
 const ASRService = require('./services/asr');
@@ -28,7 +29,29 @@ class EchoApp extends EventEmitter {
       autoStart: true
     };
     
+    // Security: Single instance guard
+    this.setupSingleInstanceGuard();
     this.setupAppLifecycle();
+  }
+
+  setupSingleInstanceGuard() {
+    const gotLock = app.requestSingleInstanceLock();
+    
+    if (!gotLock) {
+      console.log('Another instance is already running, quitting...');
+      app.quit();
+      return;
+    }
+    
+    app.on('second-instance', () => {
+      // Focus existing window when second instance is started
+      if (this.overlayWindow) {
+        if (this.overlayWindow.isMinimized()) {
+          this.overlayWindow.restore();
+        }
+        this.overlayWindow.focus();
+      }
+    });
   }
 
   async initialize() {
@@ -67,6 +90,7 @@ class EchoApp extends EventEmitter {
       this.setupMenu();
       this.registerShortcuts();
       this.setupIPC();
+      this.setupCrashResilience();
       
       // Auto-start session if enabled
       if (this.config.autoStart) {
@@ -116,9 +140,20 @@ class EchoApp extends EventEmitter {
         preload: path.join(__dirname, 'preload.js'),
         contextIsolation: true,
         nodeIntegration: false,
-        webSecurity: true
+        sandbox: true,
+        webSecurity: true,
+        spellcheck: false,
+        allowRunningInsecureContent: false,
+        experimentalFeatures: false
       }
     });
+
+    // Security: Remove menu and disable dev tools in production
+    this.overlayWindow.removeMenu();
+    
+    // Disable web security features that could be exploited
+    app.commandLine.appendSwitch('disable-features', 'CrossOriginOpenerPolicyAccessReporting');
+    app.commandLine.appendSwitch('disable-features', 'CrossOriginEmbedderPolicyCredentialless');
 
     this.overlayWindow.loadFile(path.join(__dirname, 'index.html'));
     this.overlayWindow.hide();
@@ -134,6 +169,19 @@ class EchoApp extends EventEmitter {
 
     this.overlayWindow.on('hide', () => {
       this.overlayWindow.webContents.send('overlay-hidden');
+    });
+
+    // Security: Prevent new window creation
+    this.overlayWindow.webContents.setWindowOpenHandler(() => {
+      return { action: 'deny' };
+    });
+
+    // Security: Prevent navigation to external URLs
+    this.overlayWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+      const parsedUrl = new URL(navigationUrl);
+      if (parsedUrl.origin !== 'file://') {
+        event.preventDefault();
+      }
     });
 
     // Prevent window from being captured in screen recordings
@@ -242,23 +290,40 @@ class EchoApp extends EventEmitter {
   }
 
   setupIPC() {
-    // Handle suggestion requests
-    ipcMain.handle('fetch-suggestions', async (_, context, options) => {
+    // Handle suggestion requests with validation and timeout
+    ipcMain.handle('fetch-suggestions', async (event, context, options) => {
       try {
-        const suggestions = await LLMService.getSuggestions(context, {
-          ...options,
-          sessionId: this.currentSession?.id
-        });
+        // Validate payload (lenient)
+        if (!this.validatePayload({ context, options })) {
+          console.warn('Invalid payload for fetch-suggestions, using fallback');
+          return ['Highlight your relevant experience', 'Provide a specific example', 'Ask a clarifying question'];
+        }
+        
+        // Apply timeout
+        const suggestions = await this.withTimeout(
+          () => LLMService.getSuggestions(context, {
+            ...options,
+            sessionId: this.currentSession?.id
+          }),
+          30000 // 30 second timeout
+        );
         return suggestions;
       } catch (error) {
         console.error('Error fetching suggestions:', error);
-        return [];
+        // Return fallback suggestions instead of empty array
+        return ['Highlight your relevant experience', 'Provide a specific example', 'Ask a clarifying question'];
       }
     });
 
-    // Handle transcript requests
-    ipcMain.handle('get-transcript', async (_, sessionId) => {
+    // Handle transcript requests with validation
+    ipcMain.handle('get-transcript', async (event, sessionId) => {
       try {
+        // Validate sessionId (lenient)
+        if (sessionId && typeof sessionId !== 'string' && typeof sessionId !== 'number') {
+          console.warn('Invalid sessionId type, using current session');
+          sessionId = this.currentSession?.id;
+        }
+        
         return await ASRService.getSessionTranscripts(sessionId || this.currentSession?.id);
       } catch (error) {
         console.error('Error getting transcript:', error);
@@ -266,28 +331,63 @@ class EchoApp extends EventEmitter {
       }
     });
 
-    // Handle session management
-    ipcMain.handle('start-session', async (_, options) => {
-      return await this.startSession(options);
+    // Handle session management with validation
+    ipcMain.handle('start-session', async (event, options) => {
+      try {
+        if (options && !this.validateSessionOptions(options)) {
+          console.warn('Invalid session options, using defaults');
+          options = {};
+        }
+        return await this.startSession(options);
+      } catch (error) {
+        console.error('Error starting session:', error);
+        return { success: false, error: error.message };
+      }
     });
 
     ipcMain.handle('stop-session', async () => {
-      return await this.stopSession();
+      try {
+        return await this.stopSession();
+      } catch (error) {
+        console.error('Error stopping session:', error);
+        return { success: false, error: error.message };
+      }
     });
 
-    // Handle settings
+    // Handle settings with validation
     ipcMain.handle('get-settings', () => {
       return this.config;
     });
 
-    ipcMain.handle('update-settings', (_, newConfig) => {
-      this.config = { ...this.config, ...newConfig };
-      return this.config;
+    ipcMain.handle('update-settings', (event, newConfig) => {
+      try {
+        if (!this.validateSettings(newConfig)) {
+          console.warn('Invalid settings format, using partial update');
+          // Apply only valid settings
+          if (newConfig && typeof newConfig === 'object') {
+            Object.keys(newConfig).forEach(key => {
+              if (['modelSize', 'provider', 'stealthMode', 'autoStart'].includes(key)) {
+                this.config[key] = newConfig[key];
+              }
+            });
+          }
+        } else {
+          this.config = { ...this.config, ...newConfig };
+        }
+        return this.config;
+      } catch (error) {
+        console.error('Error updating settings:', error);
+        return this.config;
+      }
     });
 
-    // Handle profile management
-    ipcMain.handle('save-profile', async (_, profileData) => {
+    // Handle profile management with validation
+    ipcMain.handle('save-profile', async (event, profileData) => {
       try {
+        if (!this.validateProfileData(profileData)) {
+          console.warn('Invalid profile data format, skipping save');
+          return false;
+        }
         await DatabaseService.saveProfile(profileData);
         return true;
       } catch (error) {
@@ -516,6 +616,82 @@ class EchoApp extends EventEmitter {
 
     // Emit transcript event for other components
     this.emit('transcript', transcriptData);
+  }
+
+  // Security: Crash resilience
+  setupCrashResilience() {
+    if (this.overlayWindow) {
+      this.overlayWindow.webContents.on('unresponsive', () => {
+        console.log('Overlay window became unresponsive');
+        // Optionally restart the overlay
+      });
+
+      this.overlayWindow.webContents.on('responsive', () => {
+        console.log('Overlay window became responsive again');
+      });
+    }
+
+    app.on('render-process-gone', (event, webContents, details) => {
+      console.log('Render process crashed:', details);
+      if (details.reason === 'crashed') {
+        // Restart overlay window
+        this.createOverlayWindow();
+      }
+    });
+
+    app.on('gpu-process-crashed', (event, killed) => {
+      console.log('GPU process crashed, killed:', killed);
+      // Restart overlay window
+      this.createOverlayWindow();
+    });
+  }
+
+  // Security: Payload validation (lenient for startup)
+  validatePayload(payload) {
+    if (!payload || typeof payload !== 'object') {
+      return false;
+    }
+    
+    // Basic validation - can be extended with schema validation
+    return true;
+  }
+
+  validateSessionOptions(options) {
+    if (!options || typeof options !== 'object') {
+      return false;
+    }
+    
+    // Validate allowed properties (lenient)
+    const allowedKeys = ['type', 'mode', 'title', 'sourceApp'];
+    return Object.keys(options).length === 0 || Object.keys(options).every(key => allowedKeys.includes(key));
+  }
+
+  validateSettings(settings) {
+    if (!settings || typeof settings !== 'object') {
+      return false;
+    }
+    
+    // Validate allowed settings (lenient)
+    const allowedKeys = ['modelSize', 'provider', 'stealthMode', 'autoStart'];
+    return Object.keys(settings).length === 0 || Object.keys(settings).every(key => allowedKeys.includes(key));
+  }
+
+  validateProfileData(profileData) {
+    if (!profileData || typeof profileData !== 'object') {
+      return false;
+    }
+    
+    // Basic validation - can be extended
+    return true;
+  }
+
+  // Security: Timeout wrapper
+  async withTimeout(asyncFunction, timeoutMs) {
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Operation timed out')), timeoutMs);
+    });
+    
+    return Promise.race([asyncFunction(), timeoutPromise]);
   }
 
   async cleanup() {

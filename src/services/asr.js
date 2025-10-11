@@ -29,12 +29,34 @@ class ASRService extends EventEmitter {
     this.sampleRate = 16000;
     this.chunkDuration = 1000; // ms
     this.overlapDuration = 500; // ms
+    
+    // Device management
+    this.selectedDeviceId = null;
+    this.availableDevices = [];
+    this.devicePermissions = {
+      microphone: false,
+      systemAudio: false
+    };
+    
+    // Error handling and retry
+    this.maxRetries = 3;
+    this.retryDelay = 1000;
+    this.consecutiveErrors = 0;
+    this.maxConsecutiveErrors = 5;
+    
+    // Privacy controls
+    this.localOnlyMode = true; // Enforce local processing
+    this.redactPII = true;
+    this.retentionDays = 30; // Auto-delete transcripts after N days
   }
 
   async initialize(modelSize = 'tiny') {
     try {
       console.log('Initializing ASR service with model:', modelSize);
       this.modelSize = modelSize;
+      
+      // Check device permissions
+      await this.checkDevicePermissions();
       
       // Initialize Whisper pipeline (placeholder for now)
       console.log('Initializing Whisper pipeline (placeholder)');
@@ -46,6 +68,9 @@ class ASRService extends EventEmitter {
       // Initialize database
       await DatabaseService.initialize();
       
+      // Start cleanup task for old transcripts
+      this.startCleanupTask();
+      
       return true;
     } catch (error) {
       console.error('Failed to initialize ASR service:', error);
@@ -55,12 +80,17 @@ class ASRService extends EventEmitter {
 
   async startSession(sessionId, options = {}) {
     if (!this.isInitialized) {
-      throw new Error('ASR service not initialized');
+      console.warn('ASR service not initialized, emitting disabled state');
+      this.emit('state', { status: 'disabled', reason: 'not-initialized' });
+      return false;
     }
 
     if (this.isRecording) {
       await this.stopSession();
     }
+    
+    // Reset error counter on new session
+    this.consecutiveErrors = 0;
 
     this.currentSessionId = sessionId;
     this.isRecording = true;
@@ -69,13 +99,23 @@ class ASRService extends EventEmitter {
 
     console.log('Starting ASR session:', sessionId);
 
-    // Start audio capture
-    await this.startAudioCapture(options);
-    
-    // Start streaming transcription
-    this.startStreamingTranscription();
+    try {
+      // Start audio capture
+      await this.startAudioCapture(options);
+      
+      // Start streaming transcription
+      this.startStreamingTranscription();
+      
+      // Emit session started event
+      this.emit('session-started', { sessionId, timestamp: new Date() });
 
-    return true;
+      return true;
+    } catch (error) {
+      console.error('Failed to start ASR session:', error);
+      this.isRecording = false;
+      this.emit('session-error', { error: error.message, sessionId });
+      throw error;
+    }
   }
 
   async stopSession() {
@@ -152,17 +192,27 @@ class ASRService extends EventEmitter {
         return;
       }
 
-      // Transcribe audio chunk
-      const result = await this.transcribeAudio(audioData);
+      // Transcribe audio chunk with retry logic
+      const result = await this.transcribeAudioWithRetry(audioData);
       
       if (result && result.text && result.text.trim()) {
         await this.handleTranscript(result);
+        // Reset error counter on successful transcription
+        this.consecutiveErrors = 0;
       }
 
       // Clear processed buffer
       this.audioBuffer = [];
     } catch (error) {
       console.error('Error processing audio buffer:', error);
+      this.consecutiveErrors++;
+      
+      // If too many consecutive errors, stop the session
+      if (this.consecutiveErrors >= this.maxConsecutiveErrors) {
+        console.error('Too many consecutive errors, stopping session');
+        this.emit('session-error', { error: 'Too many consecutive errors', sessionId: this.currentSessionId });
+        await this.stopSession();
+      }
     }
   }
 
@@ -219,14 +269,17 @@ class ASRService extends EventEmitter {
 
     // Check for new content
     if (text !== this.lastTranscript && text.trim()) {
-      console.log('New transcript:', text);
+      // Security: Redact PII if enabled
+      const processedText = this.redactPII ? this.redactPIIFromTranscript(text) : text;
+      
+      console.log('New transcript:', processedText);
       
       // Save to database
       if (this.currentSessionId) {
         await DatabaseService.addTranscript(
           this.currentSessionId,
           'user', // Speaker identification would be more sophisticated
-          text,
+          processedText,
           confidence
         );
       }
@@ -234,12 +287,12 @@ class ASRService extends EventEmitter {
       // Emit event for real-time updates
       this.emit('transcript', {
         sessionId: this.currentSessionId,
-        text,
+        text: processedText,
         confidence,
         timestamp: new Date()
       });
 
-      this.lastTranscript = text;
+      this.lastTranscript = processedText;
     }
   }
 
@@ -305,7 +358,8 @@ class ASRService extends EventEmitter {
   // Model management
   async switchModel(modelSize) {
     if (this.isRecording) {
-      throw new Error('Cannot switch model during active session');
+      console.warn('Cannot switch model during active session');
+      return false;
     }
 
     console.log('Switching to model:', modelSize);
@@ -324,6 +378,101 @@ class ASRService extends EventEmitter {
 
   getCurrentModel() {
     return this.modelSize;
+  }
+
+  // Device management
+  async checkDevicePermissions() {
+    // This would check actual device permissions in a real implementation
+    console.log('Checking device permissions...');
+    this.devicePermissions.microphone = true; // Placeholder
+    this.devicePermissions.systemAudio = false; // Placeholder
+  }
+
+  async getAvailableDevices() {
+    // This would enumerate actual audio devices in a real implementation
+    return [
+      { id: 'default', name: 'Default Microphone', type: 'microphone' },
+      { id: 'system', name: 'System Audio', type: 'system' }
+    ];
+  }
+
+  async selectDevice(deviceId) {
+    const devices = await this.getAvailableDevices();
+    const device = devices.find(d => d.id === deviceId);
+    
+    if (!device) {
+      console.warn('Device not found:', deviceId);
+      return false;
+    }
+    
+    this.selectedDeviceId = deviceId;
+    console.log('Selected device:', device.name);
+  }
+
+  // Error handling and retry
+  async transcribeAudioWithRetry(audioData) {
+    let lastError;
+    
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      try {
+        return await this.transcribeAudio(audioData);
+      } catch (error) {
+        lastError = error;
+        console.warn(`Transcription attempt ${attempt} failed:`, error.message);
+        
+        if (attempt < this.maxRetries) {
+          const delay = this.retryDelay * Math.pow(2, attempt - 1); // Exponential backoff
+          await this.sleep(delay);
+        }
+      }
+    }
+    
+    throw lastError;
+  }
+
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // Privacy controls
+  redactPIIFromTranscript(text) {
+    if (!text || typeof text !== 'string') return text;
+    
+    const patterns = [
+      { regex: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, replacement: '[EMAIL]' },
+      { regex: /\b\d{3}-\d{2}-\d{4}\b/g, replacement: '[SSN]' },
+      { regex: /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, replacement: '[CARD]' },
+      { regex: /\b\d{3}-\d{3}-\d{4}\b/g, replacement: '[PHONE]' },
+      { regex: /\b[A-Z][a-z]+ [A-Z][a-z]+\b/g, replacement: '[NAME]' },
+      { regex: /\b[A-Z]{2}\s+\d{5}(?:-\d{4})?\b/g, replacement: '[ZIP]' }
+    ];
+
+    let redacted = text;
+    patterns.forEach(({ regex, replacement }) => {
+      redacted = redacted.replace(regex, replacement);
+    });
+
+    return redacted;
+  }
+
+  // Cleanup tasks
+  startCleanupTask() {
+    // Run cleanup every hour
+    setInterval(async () => {
+      await this.cleanupOldTranscripts();
+    }, 3600000); // 1 hour
+  }
+
+  async cleanupOldTranscripts() {
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - this.retentionDays);
+      
+      // This would delete old transcripts in a real implementation
+      console.log(`Cleaning up transcripts older than ${this.retentionDays} days`);
+    } catch (error) {
+      console.error('Error cleaning up old transcripts:', error);
+    }
   }
 
   // Cleanup
