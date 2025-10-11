@@ -39,6 +39,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ settings, setSettings }) =>
           className="select-input"
         >
           <option value="en">English</option>
+          <option value="ru">Русский</option>
           <option value="tr">Türkçe</option>
           <option value="fr">Français</option>
         </select>

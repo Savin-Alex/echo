@@ -30,7 +30,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     
     setLoading(true);
     try {
-      const response = await window.echo.summarize(text);
+      const response = await window.echo.summarize(text, settings.language);
       setResult(response.summary || response.error || 'No response');
     } catch (error) {
       setResult(`Error: ${error}`);
@@ -44,7 +44,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     
     setLoading(true);
     try {
-      const response = await window.echo.reply(text);
+      const response = await window.echo.reply(text, settings.language);
       setResult(response.reply || response.error || 'No response');
     } catch (error) {
       setResult(`Error: ${error}`);

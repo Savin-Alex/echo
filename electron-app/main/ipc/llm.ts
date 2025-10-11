@@ -21,12 +21,12 @@ ipcMain.handle('llm:models', async (): Promise<any> => {
   }
 });
 
-ipcMain.handle('llm:summarize', async (_event, text: string): Promise<any> => {
+ipcMain.handle('llm:summarize', async (_event, text: string, language: string = 'en'): Promise<any> => {
   try {
     const response = await fetch(`${API_BASE}/llm/summarize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
+      body: JSON.stringify({ text, language })
     });
     
     if (response.ok) {
@@ -40,12 +40,12 @@ ipcMain.handle('llm:summarize', async (_event, text: string): Promise<any> => {
   }
 });
 
-ipcMain.handle('llm:reply', async (_event, prompt: string): Promise<any> => {
+ipcMain.handle('llm:reply', async (_event, prompt: string, language: string = 'en'): Promise<any> => {
   try {
     const response = await fetch(`${API_BASE}/llm/reply`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt })
+      body: JSON.stringify({ prompt, language })
     });
     
     if (response.ok) {

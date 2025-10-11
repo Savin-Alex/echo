@@ -29,6 +29,26 @@ const translations: { [lang: string]: Translations } = {
     whisperModel: 'Whisper Model',
     ollamaModel: 'Ollama Model'
   },
+  ru: {
+    title: 'Echo Помощник',
+    start: 'Начать',
+    stop: 'Остановить',
+    summarize: 'Резюме',
+    reply: 'Ответить',
+    generate: 'Генерировать',
+    loading: 'Загрузка...',
+    backendStatus: 'Статус Сервера',
+    connected: 'Подключено',
+    disconnected: 'Отключено',
+    inputPlaceholder: 'Введите текст для обработки...',
+    settings: 'Настройки',
+    language: 'Язык',
+    privacy: 'Режим Конфиденциальности',
+    local: 'Только Локально',
+    cloud: 'Разрешить Облако',
+    whisperModel: 'Модель Whisper',
+    ollamaModel: 'Модель Ollama'
+  },
   tr: {
     title: 'Echo Yardımcısı',
     start: 'Başlat',

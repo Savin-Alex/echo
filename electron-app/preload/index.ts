@@ -23,8 +23,8 @@ export interface EchoAPI {
   
   // LLM
   models: () => Promise<any>;
-  summarize: (text: string) => Promise<{ summary: string; error?: string }>;
-  reply: (prompt: string) => Promise<{ reply: string; error?: string }>;
+  summarize: (text: string, language?: string) => Promise<{ summary: string; error?: string; language?: string }>;
+  reply: (prompt: string, language?: string) => Promise<{ reply: string; error?: string; language?: string }>;
   generate: (options: any) => Promise<any>;
   
   // Settings
@@ -50,8 +50,8 @@ contextBridge.exposeInMainWorld('echo', {
   
   // LLM
   models: () => ipcRenderer.invoke('llm:models'),
-  summarize: (text: string) => ipcRenderer.invoke('llm:summarize', text),
-  reply: (prompt: string) => ipcRenderer.invoke('llm:reply', prompt),
+  summarize: (text: string, language?: string) => ipcRenderer.invoke('llm:summarize', text, language || 'en'),
+  reply: (prompt: string, language?: string) => ipcRenderer.invoke('llm:reply', prompt, language || 'en'),
   generate: (options: any) => ipcRenderer.invoke('llm:generate', options),
   
   // Settings
